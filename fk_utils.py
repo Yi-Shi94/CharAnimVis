@@ -18,7 +18,7 @@ def load_motion_data(bvh_file_path):
     return motion_data
 
 
-def part1_calculate_T_pose(bvh_file_path):
+def calculate_T_pose(bvh_file_path):
     """请填写以下内容
     输入： bvh 文件路径
     输出:
@@ -68,25 +68,39 @@ def part1_calculate_T_pose(bvh_file_path):
     return joint_name, joint_parent, joint_offset
 
 
-def part2_forward_kinematics(joint_name, joint_parent, joint_offset, motion_data, frame_id):
-    """请填写以下内容
-    输入: part1 获得的关节名字，父节点列表，偏移量列表
-        motion_data: np.ndarray，形状为(N,X)的numpy数组，其中N为帧数，X为Channel数
-        frame_id: int，需要返回的帧的索引
-    输出:
+def get_rest_pose(joint_name, joint_parent, joint_offset):
+    num_jnt = len(joint_name)
+    joint_positions = np.zeros((num_jnt, 3), dtype=np.float64)
+    joint_orientations = np.zeros((num_jnt, 4), dtype=np.float64)
+    #print(joint_name, joint_parent, joint_offset, length)
+    for i in range(num_jnt):
+        if joint_parent[i] == -1:
+            joint_positions[i] = joint_offset[i]
+        else:
+            joint_positions[i] = joint_positions[joint_parent[i]] + joint_offset[i]
+        joint_orientations[i, 3] = 1.0
+        #self.set_joint_position_orientation(joint_name[i], joint_positions[i], joint_orientations[i])
+    return joint_positions
+
+
+
+def fk(joint_name, joint_parent, joint_offset, motion_data_cur_frame):
+    """
         joint_positions: np.ndarray，形状为(M, 3)的numpy数组，包含着所有关节的全局位置
         joint_orientations: np.ndarray，形状为(M, 4)的numpy数组，包含着所有关节的全局旋转(四元数)
     Tips:
         1. joint_orientations的四元数顺序为(x, y, z, w)
         2. from_euler时注意使用大写的XYZ
     """
-    channals_num = (len(motion_data[frame_id]) -3) // 3
-    root_position = motion_data[frame_id][:3]
+    
+    channals_num = (len(motion_data_cur_frame) -3) // 3
+    root_position = motion_data_cur_frame[:3]
     rotations = np.zeros((channals_num, 3), dtype=np.float64)
 
     for i in range(channals_num):
-        rotations[i] = motion_data[frame_id][3+3*i: 6+3*i]
+        rotations[i] = motion_data_cur_frame[3+3*i: 6+3*i]
     
+    #print(channals_num,'ds')
     cnt = 0
     num_jnt = len(joint_name)
     joint_positions = np.zeros((num_jnt, 3), dtype=np.float64)
@@ -95,17 +109,19 @@ def part2_forward_kinematics(joint_name, joint_parent, joint_offset, motion_data
     for i in range(num_jnt):
         if joint_parent[i] == -1: #root
             joint_positions[i] = root_position
-            joint_orientations[i] = R.from_euler('XYZ', [rotations[cnt][0], rotations[cnt][1], rotations[cnt][2]], degrees=True).as_quat()
+            joint_orientations[i] = R.from_euler('ZYX', [rotations[cnt][0], rotations[cnt][1], rotations[cnt][2]], degrees=True).as_quat()
         else:
             if "_end" not in joint_name[i]:     # 末端没有CHANNELS
                 cnt += 1
-            r = R.from_euler('XYZ', [rotations[cnt][0], rotations[cnt][1], rotations[cnt][2]], degrees=True)
+        
+            r = R.from_euler('ZYX', [rotations[cnt][0], rotations[cnt][1], rotations[cnt][2]], degrees=True)
             joint_orientations[i] = (R.from_quat(joint_orientations[joint_parent[i]]) * r).as_quat()
             joint_positions[i] = joint_positions[joint_parent[i]] + R.from_quat(joint_orientations[joint_parent[i]]).apply(joint_offset[i])
+    return  root_position, joint_positions, joint_orientations
 
-    return joint_positions, joint_orientations
 
-def part3_retarget_func(T_pose_bvh_path, A_pose_bvh_path):
+
+def retarget(T_pose_bvh_path, A_pose_bvh_path):
     """
     将 A-pose的bvh重定向到T-pose上
     输入: 两个bvh文件的路径

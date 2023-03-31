@@ -54,7 +54,7 @@ def CCD(meta_data, joint_positions, joint_orientations, target_pose):
 
     return path_positions, path_orientations
 
-def part1_inverse_kinematics(meta_data, joint_positions, joint_orientations, target_pose):
+def ik(meta_data, joint_positions, joint_orientations, target_pose):
     """
     完成函数，计算逆运动学
     输入: 
